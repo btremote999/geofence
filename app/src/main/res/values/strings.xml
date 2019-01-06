@@ -9,4 +9,5 @@
     <string name="setting">Setting</string>
     <string name="require_rationale_permission_title">Require Location Permission</string>
     <string name="require_rationale_permission_message">Location permission is required contiue use the app. Do you want to proceed?</string>
+    <string name="add_geofence">Add Geofence</string>
 </resources>

@@ -1,17 +1,22 @@
 package btremote999.geofencetest;
 
+import android.annotation.SuppressLint;
 import android.location.Location;
 import android.support.annotation.NonNull;
+import android.support.v4.util.SparseArrayCompat;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.Circle;
+import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
-import java.util.HashMap;
+import btremote999.geofencetest.data.MyCircle;
+import btremote999.geofencetest.data.MyGeoFenceData;
+import btremote999.geofencetest.utils.Common;
 
 //import btremote.pokegohelper.R;
 //import btremote.pokegohelper.helper.BackendTask.TaskMovePlayer;
@@ -32,9 +37,10 @@ import java.util.HashMap;
 public class MapController {
 
     private static final String TAG = MapController.class.getSimpleName();
-    private final HashMap<Long, Marker> mCatchableMarker = new HashMap<>();
-    private final HashMap<String, Marker> mPokestopMarkers = new HashMap<>();
-    private final HashMap<String, Marker> mGymMarkers = new HashMap<>();
+//    private final HashMap<Long, Marker> mCatchableMarker = new HashMap<>();
+//    private final HashMap<String, Marker> mPokestopMarkers = new HashMap<>();
+//    private final HashMap<String, Marker> mGymMarkers = new HashMap<>();
+    private final int SURFACE_COLOR = 0x22008577;
     private final GoogleMap map;
     private final MainActivity mMainActivity;
 
@@ -44,6 +50,9 @@ public class MapController {
     private Circle mSelfCircle;   // pokestop
     private Circle mSelfCircle2; // encounter
     private LatLng mLastDest;
+
+    private SparseArrayCompat<Marker> mMarkerArray = new SparseArrayCompat<>();
+    private SparseArrayCompat<Object> mSurfaceArray = new SparseArrayCompat<>();
 
     // flag for check the map was init or not.
     public boolean mWasInit;
@@ -202,6 +211,7 @@ public class MapController {
      *
      * @param centerLocation
      */
+    @SuppressLint("MissingPermission")
     public void init(Location centerLocation) {
         // init flag update
         mWasInit = true;
@@ -212,14 +222,16 @@ public class MapController {
         map.setIndoorEnabled(true);
         map.setMaxZoomPreference(20.0f);
         map.setMinZoomPreference(2.0f);
-        map.setBuildingsEnabled(false);
-        map.setOnMarkerClickListener(new MyOnMarkerClickListener());
+        map.setBuildingsEnabled(true);
+        map.setMapType(GoogleMap.MAP_TYPE_NORMAL);
+
+        map.setMyLocationEnabled(true);
+        map.setPadding(0,0,Common.dpToPx(20), Common.dpToPx(80));
+//        map.setOnMarkerClickListener(new MyOnMarkerClickListener());
 
         updateSelf(centerLocation);
         map.moveCamera(CameraUpdateFactory.zoomTo(18.5f));
         map.moveCamera(CameraUpdateFactory.newLatLng(mSelf.getPosition()));
-
-
     }
 
 
@@ -418,6 +430,45 @@ public class MapController {
 //        }
 //    }
 
+    public void addGeoFence(MyGeoFenceData myGeoFenceData) {
+        LatLng latLng = new LatLng(myGeoFenceData.lat, myGeoFenceData.lng);
+
+        // create marker
+        Marker marker = map.addMarker(
+                new MarkerOptions()
+                        .position(latLng)
+                        .title(myGeoFenceData.name)
+        );
+        marker.setTitle(myGeoFenceData.name);
+        marker.setTag(myGeoFenceData);
+
+        // create surface
+        addSurface(myGeoFenceData, latLng);
+
+
+        this.mMarkerArray.put(myGeoFenceData.id, marker);
+
+
+    }
+
+    private void addSurface(MyGeoFenceData myGeoFenceData, LatLng latLng) {
+        Object surface = null;
+        if(myGeoFenceData.surface instanceof MyCircle){
+            // create circle
+            surface = map.addCircle(
+                    new CircleOptions()
+                            .center(latLng)
+                            .strokeWidth(1.0f)
+                            .fillColor(SURFACE_COLOR)
+                            .radius(((MyCircle) myGeoFenceData.surface).radius)
+            );
+        }
+
+        if(surface != null)
+            this.mSurfaceArray.put(myGeoFenceData.id, surface);
+
+    }
+
 
     private <T> Marker addMarker(LatLng loc, int resId, T tag) {
         Marker marker = map.addMarker(
@@ -441,32 +492,33 @@ public class MapController {
 
 
 
-    private class MyOnMarkerClickListener implements GoogleMap.OnMarkerClickListener {
-        @Override
-        public boolean onMarkerClick(Marker marker) {
-//            Object obj = marker.getTag();
-//            if (obj != null) {
-//                if (obj instanceof PokestopWrapper) {
-//                    if (!onClick_PokestopWrapper((PokestopWrapper) obj)) {
-//                        // cannot loot -> change the action to move destinatin
-//                        LatLng latlng = UtilTools.randLatLng(marker.getPosition(), 60, 100);
-//                        setDestination(latlng);
-//                    }
-//                } else if (obj instanceof CatchableWrapper) {
-//                    onClick_Catchable((CatchableWrapper) obj);
-//                } else if( obj instanceof GymWrapper){
-//                    if(!onClick_GymWrapper((GymWrapper) obj, marker)){
-//                        LatLng latlng = UtilTools.randLatLng(marker.getPosition(), 60, 100);
-//                        setDestination(latlng);
-//                    }
-//                }
+//    private class MyOnMarkerClickListener implements GoogleMap.OnMarkerClickListener {
+//        @Override
+//        public boolean onMarkerClick(Marker marker) {
+////            Object obj = marker.getTag();
+////            if (obj != null) {
+////                if (obj instanceof PokestopWrapper) {
+////                    if (!onClick_PokestopWrapper((PokestopWrapper) obj)) {
+////                        // cannot loot -> change the action to move destinatin
+////                        LatLng latlng = UtilTools.randLatLng(marker.getPosition(), 60, 100);
+////                        setDestination(latlng);
+////                    }
+////                } else if (obj instanceof CatchableWrapper) {
+////                    onClick_Catchable((CatchableWrapper) obj);
+////                } else if( obj instanceof GymWrapper){
+////                    if(!onClick_GymWrapper((GymWrapper) obj, marker)){
+////                        LatLng latlng = UtilTools.randLatLng(marker.getPosition(), 60, 100);
+////                        setDestination(latlng);
+////                    }
+////                }
+////
+////            }
 //
-//            }
+//
+//            return false;
+//        }
+//    }
 
-
-            return false;
-        }
-    }
 
 
 
