@@ -1,11 +1,14 @@
 package btremote999.geofencetest;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
+import android.annotation.TargetApi;
 import android.arch.lifecycle.ViewModelProviders;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
@@ -31,6 +34,8 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 
+import btremote999.geofencetest.data.MyGeoFenceData;
+import btremote999.geofencetest.utils.IdGenerator;
 import btremote999.geofencetest.utils.Logger;
 import butterknife.BindView;
 import butterknife.ButterKnife;
@@ -38,11 +43,16 @@ import butterknife.ButterKnife;
 public class MainActivity extends AppCompatActivity implements OnMapReadyCallback {
     private static final int REQUEST_CODE_FOR_LOCATION = 101;
     private static final int REQUEST_CODE_FOR_SETTING = 102;
+
+    private static final int FAB_ACTION_ADD = 0;  // default
+    private static final int FAB_ACTION_DELETE = 1;
+
     private static final String TAG = "MainActivity";
     private SupportMapFragment mMapFragment;
 
     private FusedLocationProviderClient mFusedLocationClient;
     private MainVM mMainVM;
+    private int mFabAction = FAB_ACTION_ADD;
 
 
     @BindView(R.id.fab) FloatingActionButton mFab;
@@ -60,8 +70,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-        mFab.setOnClickListener(view -> Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_INDEFINITE)
-                .setAction("Action", null).show());
+        mFab.setOnClickListener(view -> this.onFabClicked());
 
         // setup  google map
         mMapFragment = (SupportMapFragment) getSupportFragmentManager()
@@ -75,12 +84,37 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         mMainVM.mState.setValue(StateFlow.CHECK_PERMISSION);
     }
 
+    private void onFabClicked() {
+        Logger.d(TAG, "onFabClicked: ");
+        // TODO: 06/01/2019 fab button serve 2 functions:
+        //showGeoFenceEdit(mFabAction);
+        if(mFabAction == FAB_ACTION_ADD) {
+            mMainVM.mGeofenceEditState.setValue(StateFlow.GEO_FENCE_ADD_START);
+        }else if(mFabAction == FAB_ACTION_DELETE){
+            // delete GeoFance
+            MyGeoFenceData target = mMainVM.mSelectedGeoFence.getValue();
+            if(target != null){
+                mMainVM.mMyGeoFenceDataList.remove(target.id);
+                mMainVM.mMapController.removeMarker(target);
+
+                mMainVM.mSelectedGeoFence.setValue(null);
+            }
+        }
+
+
+    }
+
+    private void showGeoFenceEdit(int fabAction) {
+        // Show Dialog Fragment
+        GeoFenceAddDialog dlg = new GeoFenceAddDialog();
+        dlg.show(getSupportFragmentManager(), GeoFenceAddDialog.TAG);
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
         monitorLocationUpdate();
     }
-
 
     @Override
     protected void onPause() {
@@ -130,6 +164,24 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         mMainVM.mState.observe(this, this::onStateChanged);
         mMainVM.mLocation.observe(this, this::onLocationChanged);
+        mMainVM.mGeofenceEditState.observe(this, this::onGeoFenceEditStateChanged);
+
+        // monitor selected marker
+        mMainVM.mSelectedGeoFence.observe(this, this::onSelectedGeofenceChanged);
+    }
+
+    private void onSelectedGeofenceChanged(MyGeoFenceData geoFenceData) {
+        // trigger when geoFenceData change
+        if(geoFenceData == null){
+            // unselected
+            mFab.setImageResource(R.drawable.ic_action_add);
+            mFabAction = FAB_ACTION_ADD;
+        }else {
+            // selected
+            mFab.setImageResource(R.drawable.ic_action_delete);
+            mFabAction = FAB_ACTION_DELETE;
+        }
+
     }
 
     private void onStateChanged(@NonNull Integer state) {
@@ -168,6 +220,50 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
+    private void onGeoFenceEditStateChanged(Integer state) {
+        if(state == null)
+            return;
+        Logger.d(TAG, "onGeoFenceEditState: %s", StateFlow.toString(state));
+        switch(state){
+            // show the dialog for add geofence
+            case StateFlow.GEO_FENCE_ADD_START:
+
+                showGeoFenceEdit(mFabAction);
+                break;
+
+
+            case StateFlow.GEO_FENCE_PICK_LOCATION:
+                Logger.d(TAG, "onGeoFenceEditState: do nothing -> waiting for user pick a location");
+                // selected a location (point) from map)
+                // show the dialog again
+                // do nothing 
+                break;
+                
+            case StateFlow.GEO_FENCE_PICK_LOCATION_DONE:
+                // location selected -> update dialog data
+                showGeoFenceEdit(mFabAction);
+                break; 
+                
+            case StateFlow.GEO_FENCE_ADD_COMPLETED:
+
+                // set id
+                int id = IdGenerator.newId();
+                MyGeoFenceData dialogData = mMainVM.mDialogData;
+                dialogData.id =id;
+
+                // add new GeoFenceDataList
+                mMainVM.mMyGeoFenceDataList.put(id, dialogData);
+                // add to map marker
+                mMainVM.mMapController.addGeoFence(dialogData);
+
+                // reset
+                mMainVM.mDialogData = null;
+                mMainVM.mGeofenceEditState.setValue(StateFlow.NONE);
+                break;
+        }
+
+    }
+
     private void showRequestPermissionRationale() {
         new AlertDialog.Builder(this)
                 .setTitle(R.string.require_rationale_permission_title)
@@ -184,19 +280,19 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     // region Google Map
-    private MapController mMapController;
+
 
     @Override
     public void onMapReady(GoogleMap googleMap) {
         Logger.d(TAG, "onMapReady: ");
-        mMapController = new MapController(this, googleMap);
+        mMainVM.mMapController = new MapController(this, googleMap, mMainVM.mSelectedGeoFence);
 
         Location location = mMainVM.mLocation.getValue();
         if (location != null) {
-            if (mMapController.mWasInit)
-                mMapController.updateSelf(location);
+            if (mMainVM.mMapController.mWasInit)
+                mMainVM.mMapController.updateSelf(location);
             else
-                mMapController.init(location);
+                mMainVM.mMapController.init(location);
         }
 
         googleMap.setOnMapClickListener(this::onMapClicked);
@@ -212,7 +308,25 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     private void onMapClicked(LatLng latLng) {
         // Validation for Mock Location
-        if (BuildConfig.DEBUG) {
+        int geoFenceState = mMainVM.mGeofenceEditState.getValue();
+        if(geoFenceState == StateFlow.GEO_FENCE_PICK_LOCATION){
+
+            mMainVM.mDialogData.lat =  latLng.latitude;
+            mMainVM.mDialogData.lng = latLng.longitude;
+
+            // update State
+            mMainVM.mGeofenceEditState.setValue(StateFlow.GEO_FENCE_PICK_LOCATION_DONE);
+            return;
+        }
+
+        if(mMainVM.mSelectedGeoFence.getValue() != null){
+            // unselect geo fence
+            mMainVM.mSelectedGeoFence.setValue(null);
+        }
+
+
+        boolean allowClick = false;
+        if ( allowClick) {
             Location location = new Location("mock");
             location.setLatitude(latLng.latitude);
             location.setLongitude(latLng.longitude);
@@ -225,6 +339,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     // region Permission
     boolean mAskedPermission = false;
 
+    @TargetApi(Build.VERSION_CODES.M)
     private void checkLocationPermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             mMainVM.mState.setValue(StateFlow.PERMISSION_GRANTED);
@@ -252,6 +367,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         this.startActivityForResult(myAppSettings, REQUEST_CODE_FOR_SETTING);
     }
 
+    @TargetApi(Build.VERSION_CODES.M)
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         if (requestCode == REQUEST_CODE_FOR_LOCATION) {
@@ -300,6 +416,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     /**
      * request for last know location
      */
+    @SuppressLint("MissingPermission")
     private void getLastKnownLocation() {
         if (mFusedLocationClient == null)
             mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
@@ -322,18 +439,19 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             // TODO: show message ? retry ?
         } else {
             Logger.i(TAG, "onLocationChanged: %s", location);
-            if (mMapController != null) {
+            if (mMainVM.mMapController != null) {
                 // setup last location on the map ?
-                if (mMapController.mWasInit)
-                    mMapController.updateSelf(location);
+                if (mMainVM.mMapController.mWasInit)
+                    mMainVM.mMapController.updateSelf(location);
                 else
-                    mMapController.init(location);
+                    mMainVM.mMapController.init(location);
             }
         }
     }
 
 
 
+    @SuppressLint("MissingPermission")
     private void monitorLocationUpdate() {
         // add location update
         if (mFusedLocationClient != null) {
@@ -382,7 +500,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             Boolean mockLocation = mMainVM.mMockLocation.getValue();
 
             // skip actual location if mock location activated
-            if (mockLocation != null && mockLocation == true) {
+            if (mockLocation != null && mockLocation) {
                 Logger.d(TAG, "onLocationResult: mock location -> abort");
                 return;
             }
