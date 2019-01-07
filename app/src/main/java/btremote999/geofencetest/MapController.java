@@ -1,6 +1,7 @@
 package btremote999.geofencetest;
 
 import android.annotation.SuppressLint;
+import android.arch.lifecycle.MutableLiveData;
 import android.location.Location;
 import android.support.annotation.NonNull;
 import android.support.v4.util.SparseArrayCompat;
@@ -53,13 +54,15 @@ public class MapController {
 
     private SparseArrayCompat<Marker> mMarkerArray = new SparseArrayCompat<>();
     private SparseArrayCompat<Object> mSurfaceArray = new SparseArrayCompat<>();
+    private final MutableLiveData<MyGeoFenceData> mSelectedMarker;
 
     // flag for check the map was init or not.
     public boolean mWasInit;
 
-    public MapController(MainActivity mainActivity, GoogleMap map) {
+    public MapController(MainActivity mainActivity, GoogleMap map, MutableLiveData<MyGeoFenceData> selectedMarkerLiveData) {
         this.mMainActivity = mainActivity;
         this.map = map;
+        this.mSelectedMarker = selectedMarkerLiveData;
     }
 
     // add destinal so play can MOVE !!!
@@ -227,7 +230,7 @@ public class MapController {
 
         map.setMyLocationEnabled(true);
         map.setPadding(0,0,Common.dpToPx(20), Common.dpToPx(80));
-//        map.setOnMarkerClickListener(new MyOnMarkerClickListener());
+        map.setOnMarkerClickListener(new MyOnMarkerClickListener());
 
         updateSelf(centerLocation);
         map.moveCamera(CameraUpdateFactory.zoomTo(18.5f));
@@ -492,34 +495,57 @@ public class MapController {
 
 
 
-//    private class MyOnMarkerClickListener implements GoogleMap.OnMarkerClickListener {
-//        @Override
-//        public boolean onMarkerClick(Marker marker) {
-////            Object obj = marker.getTag();
-////            if (obj != null) {
-////                if (obj instanceof PokestopWrapper) {
-////                    if (!onClick_PokestopWrapper((PokestopWrapper) obj)) {
-////                        // cannot loot -> change the action to move destinatin
-////                        LatLng latlng = UtilTools.randLatLng(marker.getPosition(), 60, 100);
-////                        setDestination(latlng);
-////                    }
-////                } else if (obj instanceof CatchableWrapper) {
-////                    onClick_Catchable((CatchableWrapper) obj);
-////                } else if( obj instanceof GymWrapper){
-////                    if(!onClick_GymWrapper((GymWrapper) obj, marker)){
-////                        LatLng latlng = UtilTools.randLatLng(marker.getPosition(), 60, 100);
-////                        setDestination(latlng);
-////                    }
-////                }
-////
-////            }
+    private class MyOnMarkerClickListener implements GoogleMap.OnMarkerClickListener {
+        @Override
+        public boolean onMarkerClick(Marker marker) {
+//            Object obj = marker.getTag();
+//            if (obj != null) {
+//                if (obj instanceof PokestopWrapper) {
+//                    if (!onClick_PokestopWrapper((PokestopWrapper) obj)) {
+//                        // cannot loot -> change the action to move destinatin
+//                        LatLng latlng = UtilTools.randLatLng(marker.getPosition(), 60, 100);
+//                        setDestination(latlng);
+//                    }
+//                } else if (obj instanceof CatchableWrapper) {
+//                    onClick_Catchable((CatchableWrapper) obj);
+//                } else if( obj instanceof GymWrapper){
+//                    if(!onClick_GymWrapper((GymWrapper) obj, marker)){
+//                        LatLng latlng = UtilTools.randLatLng(marker.getPosition(), 60, 100);
+//                        setDestination(latlng);
+//                    }
+//                }
 //
-//
-//            return false;
-//        }
-//    }
+//            }
+            Object obj = marker.getTag();
+            if(obj instanceof MyGeoFenceData) {
+                MyGeoFenceData fenceData = (MyGeoFenceData) obj;
+                mSelectedMarker.setValue(fenceData);
+            }else{
+                // possible select self
+                mSelectedMarker.setValue(null);
+            }
 
 
+            return false;
+        }
+    }
+
+    public void removeMarker(@NonNull  MyGeoFenceData target) {
+        int id = target.id;
+        Marker marker = this.mMarkerArray.get(id);
+        Object surface= this.mSurfaceArray.get(id);
+
+        if(marker != null) {
+            this.mMarkerArray.remove(id);
+            marker.remove();
+        }
+        if(surface instanceof Circle){
+            this.mSurfaceArray.remove(id);
+            Circle circle = (Circle) surface;
+            circle.remove();
+        }
+
+    }
 
 
 //    private boolean onClick_GymWrapper(GymWrapper gymWrapper, Marker marker) {

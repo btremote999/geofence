@@ -14,6 +14,10 @@ public class MainVM extends ViewModel {
     // Geo Fence Map Add/Edit State
     MutableLiveData<Integer> mGeofenceEditState = new MutableLiveData<>();
     MyGeoFenceData mDialogData;
+
+    // Set when a Geofence has been selected from  Map
+    MutableLiveData<MyGeoFenceData> mSelectedGeoFence = new MutableLiveData<>();
+    // Collection of GeoFenceData
     SparseArrayCompat<MyGeoFenceData> mMyGeoFenceDataList = new SparseArrayCompat<>();
 
     MutableLiveData<Location> mLocation = new MutableLiveData<>();

@@ -45,7 +45,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private static final int REQUEST_CODE_FOR_SETTING = 102;
 
     private static final int FAB_ACTION_ADD = 0;  // default
-    private static final int FAB_ACTION_EDIT = 1;
+    private static final int FAB_ACTION_DELETE = 1;
 
     private static final String TAG = "MainActivity";
     private SupportMapFragment mMapFragment;
@@ -88,7 +88,18 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         Logger.d(TAG, "onFabClicked: ");
         // TODO: 06/01/2019 fab button serve 2 functions:
         //showGeoFenceEdit(mFabAction);
-        mMainVM.mGeofenceEditState.setValue(StateFlow.GEO_FENCE_ADD_START);
+        if(mFabAction == FAB_ACTION_ADD) {
+            mMainVM.mGeofenceEditState.setValue(StateFlow.GEO_FENCE_ADD_START);
+        }else if(mFabAction == FAB_ACTION_DELETE){
+            // delete GeoFance
+            MyGeoFenceData target = mMainVM.mSelectedGeoFence.getValue();
+            if(target != null){
+                mMainVM.mMyGeoFenceDataList.remove(target.id);
+                mMainVM.mMapController.removeMarker(target);
+
+                mMainVM.mSelectedGeoFence.setValue(null);
+            }
+        }
 
 
     }
@@ -153,7 +164,24 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         mMainVM.mState.observe(this, this::onStateChanged);
         mMainVM.mLocation.observe(this, this::onLocationChanged);
-        mMainVM.mGeofenceEditState.observe(this, this::onGeoFenceEditState);
+        mMainVM.mGeofenceEditState.observe(this, this::onGeoFenceEditStateChanged);
+
+        // monitor selected marker
+        mMainVM.mSelectedGeoFence.observe(this, this::onSelectedGeofenceChanged);
+    }
+
+    private void onSelectedGeofenceChanged(MyGeoFenceData geoFenceData) {
+        // trigger when geoFenceData change
+        if(geoFenceData == null){
+            // unselected
+            mFab.setImageResource(R.drawable.ic_action_add);
+            mFabAction = FAB_ACTION_ADD;
+        }else {
+            // selected
+            mFab.setImageResource(R.drawable.ic_action_delete);
+            mFabAction = FAB_ACTION_DELETE;
+        }
+
     }
 
     private void onStateChanged(@NonNull Integer state) {
@@ -192,7 +220,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
-    private void onGeoFenceEditState(Integer state) {
+    private void onGeoFenceEditStateChanged(Integer state) {
         if(state == null)
             return;
         Logger.d(TAG, "onGeoFenceEditState: %s", StateFlow.toString(state));
@@ -228,6 +256,9 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 // add to map marker
                 mMainVM.mMapController.addGeoFence(dialogData);
 
+                // reset
+                mMainVM.mDialogData = null;
+                mMainVM.mGeofenceEditState.setValue(StateFlow.NONE);
                 break;
         }
 
@@ -254,7 +285,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     @Override
     public void onMapReady(GoogleMap googleMap) {
         Logger.d(TAG, "onMapReady: ");
-        mMainVM.mMapController = new MapController(this, googleMap);
+        mMainVM.mMapController = new MapController(this, googleMap, mMainVM.mSelectedGeoFence);
 
         Location location = mMainVM.mLocation.getValue();
         if (location != null) {
@@ -288,8 +319,14 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             return;
         }
 
+        if(mMainVM.mSelectedGeoFence.getValue() != null){
+            // unselect geo fence
+            mMainVM.mSelectedGeoFence.setValue(null);
+        }
 
-        if (BuildConfig.DEBUG) {
+
+        boolean allowClick = false;
+        if ( allowClick) {
             Location location = new Location("mock");
             location.setLatitude(latLng.latitude);
             location.setLongitude(latLng.longitude);
