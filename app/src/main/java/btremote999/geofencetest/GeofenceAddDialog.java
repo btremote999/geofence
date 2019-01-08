@@ -69,31 +69,6 @@ public class GeofenceAddDialog extends DialogFragment {
         return dlg;
     }
 
-
-
-//    @Nullable
-//    @Override
-//    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-//
-////        mMainVM = ViewModelProviders.of(getActivity()).get(MainVM.class);
-//
-////        new Handler(Looper.getMainLooper()).post(() -> {
-////            Dialog dlg = getDialog();
-////            View map = dlg.findViewById(R.id.grpMap);
-////
-////            edWifi = dlg.findViewById(R.id.edWifi);
-////            edLat = dlg.findViewById(R.id.edLat);
-////            edLng = dlg.findViewById(R.id.edLng);
-////            edRadius = dlg.findViewById(R.id.edRadius);
-////
-////
-////            bindView(dlg);
-////            if (map != null)
-////                map.setOnClickListener(this::onMapClicked);
-////        });
-//        return super.onCreateView(inflater, container, savedInstanceState);
-//    }
-
     private void bindView(Dialog dlg) {
         if (mMainVM == null) {
             Logger.w(TAG, "bindView: mMainVM is null -> abort");

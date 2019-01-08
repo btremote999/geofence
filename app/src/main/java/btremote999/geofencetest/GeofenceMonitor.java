@@ -11,6 +11,7 @@ import com.google.android.gms.location.Geofence;
 import com.google.android.gms.location.GeofencingClient;
 import com.google.android.gms.location.GeofencingRequest;
 import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.LocationStatusCodes;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 
@@ -21,6 +22,10 @@ import btremote999.geofencetest.data.MyGeoFenceData;
 import btremote999.geofencetest.utils.Logger;
 
 public class GeofenceMonitor implements OnCompleteListener<Void> {
+    public interface OnMonitorStatus {
+        void onMonitorStatusUpdate(int statusCode);
+    }
+
     private static final String TAG = "GeofenceMonitor";
     private static final int BROADCAST_REQ_CODE = 201;
     private final GeofencingClient mGeofencingClient;
@@ -28,15 +33,17 @@ public class GeofenceMonitor implements OnCompleteListener<Void> {
 
     private List<Geofence> mGeofenceList = new ArrayList<>();
     private boolean mIsMonitoring;
+    private final OnMonitorStatus mListener;
 
 
     //Used when requesting to add or remove geofences.
     private PendingIntent mGeofencePendingIntent;
     private Context mContext;
 
-    public GeofenceMonitor(Context context) {
+    public GeofenceMonitor(@NonNull Context context, @NonNull OnMonitorStatus listener) {
         mContext = context;
         mGeofencingClient = LocationServices.getGeofencingClient(context);
+        mListener = listener;
     }
 
     /**
@@ -44,7 +51,7 @@ public class GeofenceMonitor implements OnCompleteListener<Void> {
      * when the GeoFenceData Changed
      */
     @SuppressLint("MissingPermission")
-    private void startGeofencMonitor(){
+    private void startGeofenceMonitor() {
         mGeofencingClient.addGeofences(getGeofencingRequest(), getGeofencePendingIntent())
                 .addOnCompleteListener(this)
 //            .addOnSuccessListener(new OnSuccessListener<Void>() {
@@ -68,10 +75,10 @@ public class GeofenceMonitor implements OnCompleteListener<Void> {
     /**
      * Stop Geofence Montior service
      */
-    public void stopGeofenceMonitor(){
+    public void stopGeofenceMonitor() {
         this.mIsMonitoring = false;
 
-        if(mGeofencePendingIntent != null)
+        if (mGeofencePendingIntent != null)
             mGeofencingClient.removeGeofences(mGeofencePendingIntent);
     }
 
@@ -80,27 +87,28 @@ public class GeofenceMonitor implements OnCompleteListener<Void> {
      * Action:
      * 1. added new Geofence into the list
      * 2. update the geofence request
+     *
      * @param data
      */
     public void addGeofence(MyGeoFenceData data) {
         mGeofenceList.add(data.getGeofence());
-        startGeofencMonitor();
+        startGeofenceMonitor();
     }
 
     @SuppressLint("MissingPermission")
-    public void removeGeofence(MyGeoFenceData data){
+    public void removeGeofence(MyGeoFenceData data) {
         // search and destroy
-        for(Geofence gf : mGeofenceList){
+        for (Geofence gf : mGeofenceList) {
             int id = Integer.valueOf(gf.getRequestId());
-            if(data.id == id){
+            if (data.id == id) {
                 // destroy it
                 mGeofenceList.remove(gf);
                 break;
             }
         }
 
-        if(mGeofenceList.size() > 0)
-            startGeofencMonitor();
+        if (mGeofenceList.size() > 0)
+            startGeofenceMonitor();
         else
             stopGeofenceMonitor();
     }
@@ -111,7 +119,7 @@ public class GeofenceMonitor implements OnCompleteListener<Void> {
         // The INITIAL_TRIGGER_ENTER flag indicates that geofencing service should trigger a
         // GEOFENCE_TRANSITION_ENTER notification when the geofence is added and if the device
         // is already inside that geofence.
-        builder.setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER|GeofencingRequest.INITIAL_TRIGGER_EXIT);
+        builder.setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER );
 
         // Add the geofences to be monitored by geofencing service.
         builder.addGeofences(mGeofenceList);
@@ -137,26 +145,22 @@ public class GeofenceMonitor implements OnCompleteListener<Void> {
     @Override
     public void onComplete(@NonNull Task<Void> task) {
         Logger.d(TAG, "onComplete: success=%s", task.isSuccessful());
-        if(!task.isSuccessful()){
+        if (!task.isSuccessful()) {
 //            Note: found status code 1000
 //            GEOFENCE_NOT_AVAILABLE (code '1000')
 //            https://stackoverflow.com/questions/40093750/google-geofencing-not-working-always-geofence-not-available
             Logger.w(TAG, "onComplete: not success -> api exception");
             Exception exception = task.getException();
-            if(exception instanceof ApiException){
-                ApiException apiException = (ApiException) exception;
-                Logger.w(TAG, "onComplete failed: %d: %s"
-                        ,apiException.getStatusCode()
-                        ,apiException.getMessage());
 
-            }else {
-                Logger.e(TAG, "onComplete: Exception-cause[%s] msg[%s]", exception.getCause(), exception.getMessage());
-            }
-
-            // TODO: 08/01/2019 show error to UI
-        }else {
+            ApiException apiException = (ApiException) exception;
+            assert apiException != null;
+            mListener.onMonitorStatusUpdate(apiException.getStatusCode());
+        } else {
             Logger.d(TAG, "onComplete: success");
+            mListener.onMonitorStatusUpdate(LocationStatusCodes.SUCCESS);
         }
 
     }
+
+
 }

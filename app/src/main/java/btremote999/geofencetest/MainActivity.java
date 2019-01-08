@@ -13,6 +13,7 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.annotation.StringRes;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
@@ -23,20 +24,19 @@ import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.TextView;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.Geofence;
-import com.google.android.gms.location.GeofencingEvent;
 import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.LocationStatusCodes;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
-
-import java.util.List;
 
 import btremote999.geofencetest.data.MyGeoFenceData;
 import btremote999.geofencetest.utils.IdGenerator;
@@ -44,7 +44,13 @@ import btremote999.geofencetest.utils.Logger;
 import butterknife.BindView;
 import butterknife.ButterKnife;
 
-public class MainActivity extends AppCompatActivity implements OnMapReadyCallback {
+public class MainActivity extends AppCompatActivity implements OnMapReadyCallback, GeofenceMonitor.OnMonitorStatus {
+    private enum EDeviceStatus {
+        Unknown,
+        In,
+        Out
+    }
+
     private static final int REQUEST_CODE_FOR_LOCATION = 101;
     private static final int REQUEST_CODE_FOR_SETTING = 102;
 
@@ -52,12 +58,11 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private static final int FAB_ACTION_DELETE = 1;
 
     private static final String TAG = "MainActivity";
-    private SupportMapFragment mMapFragment;
 
     private FusedLocationProviderClient mFusedLocationClient;
     private GeofenceMonitor mGeofenceMonitor;
-
-//    private GeofenceBroadcastReceiver mGeofenceBroadcastReceiver;
+    private WifiNetworkMonitor mWifiNetworkMonitor;
+    private MyWifiStatusCallback mWifiStatusCallback;
 
     private MainVM mMainVM;
     private int mFabAction = FAB_ACTION_ADD;
@@ -81,33 +86,28 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         mFab.setOnClickListener(view -> this.onFabClicked());
 
         // setup  google map
-        mMapFragment = (SupportMapFragment) getSupportFragmentManager()
+        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
-        if (mMapFragment != null)
-            mMapFragment.getMapAsync(this);
+        if (mapFragment != null)
+            mapFragment.getMapAsync(this);
 
         // setup location callback
         mLocationCallback = new MyLocationCallback();
-
-
-        // Broadcast Receiver
-//        mGeofenceBroadcastReceiver = new GeofenceBroadcastReceiver();
-//        registerReceiver(mGeofenceBroadcastReceiver,
-//                new IntentFilter());
+        // setup wifi status callback
+        mWifiStatusCallback = new MyWifiStatusCallback();
 
         mMainVM.mState.setValue(StateFlow.CHECK_PERMISSION);
     }
 
     private void onFabClicked() {
         Logger.d(TAG, "onFabClicked: ");
-        // TODO: 06/01/2019 fab button serve 2 functions:
-        //showGeoFenceEdit(mFabAction);
-        if(mFabAction == FAB_ACTION_ADD) {
+        // fab button serve 2 functions:
+        if (mFabAction == FAB_ACTION_ADD) {
             mMainVM.mGeofenceEditState.setValue(StateFlow.GEO_FENCE_ADD_START);
-        }else if(mFabAction == FAB_ACTION_DELETE){
+        } else if (mFabAction == FAB_ACTION_DELETE) {
             // delete GeoFance
             MyGeoFenceData target = mMainVM.mSelectedGeoFence.getValue();
-            if(target != null){
+            if (target != null) {
                 // remove geofence from container
                 mMainVM.mMyGeoFenceDataList.remove(target.id);
 
@@ -136,11 +136,18 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     protected void onResume() {
         super.onResume();
         monitorLocationUpdate();
+
+        // Wifi start monitor
+        if (mWifiNetworkMonitor == null) {
+            mWifiNetworkMonitor = new WifiNetworkMonitor();
+        }
+        mWifiNetworkMonitor.startWifiMonitor(this, mWifiStatusCallback);
+
     }
 
     @Override
     protected void onDestroy() {
-        if(mGeofenceMonitor != null)
+        if (mGeofenceMonitor != null)
             mGeofenceMonitor.stopGeofenceMonitor();
 
         super.onDestroy();
@@ -149,6 +156,12 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     @Override
     protected void onPause() {
         unMonitorLocationUpdate();
+
+        // Wifi stop monitor
+        if (mWifiNetworkMonitor != null) {
+            mWifiNetworkMonitor.stopWifiMonitor(this);
+        }
+
         super.onPause();
     }
 
@@ -168,6 +181,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         //noinspection SimplifiableIfStatement
         if (id == R.id.action_settings) {
+            Intent viewIntent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+            startActivity(viewIntent);
             return true;
         }
 
@@ -189,26 +204,16 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     @Override
     protected void onNewIntent(Intent intent) {
-        Logger.d(TAG, "onNewIntent: intent");
-        if(Consts.GEOFENCE.equals(intent.getAction())) {
-            Intent geofenceEvent = intent.getParcelableExtra(Consts.DATA);
 
-            GeofencingEvent geofencingEvent = GeofencingEvent.fromIntent(intent);
-            if (geofencingEvent.hasError()) {
-                return;
-            }
+        if (Consts.GEOFENCE.equals(intent.getAction())) {
+            Logger.d(TAG, "onNewIntent: received geofence intent");
+//            Intent geofenceEvent = intent.getParcelableExtra(Consts.DATA);
 
             // Get the transition type.
-            int geofenceTransition = geofencingEvent.getGeofenceTransition();
-
-            // Test that the reported transition was of interest.
-            if (geofenceTransition == Geofence.GEOFENCE_TRANSITION_ENTER ||
-                    geofenceTransition == Geofence.GEOFENCE_TRANSITION_EXIT) {
-
-                // Get the geofences that were triggered. A single event can trigger multiple geofences.
-                List<Geofence> triggeringGeofences = geofencingEvent.getTriggeringGeofences();
-            }
-        }else {
+            int geofenceTransition = intent.getIntExtra(Consts.DATA, -1);
+            Logger.i(TAG, "onNewIntent: geofenceTransition = %d", geofenceTransition);
+            mMainVM.mGeofenceTransition.setValue(geofenceTransition);
+        } else {
             super.onNewIntent(intent);
         }
     }
@@ -222,15 +227,24 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         // monitor selected marker
         mMainVM.mSelectedGeoFence.observe(this, this::onSelectedGeofenceChanged);
+
+        // Geofencing changed
+        mMainVM.mGeofenceTransition.observe(this, this::changeDisplayStatus);
+        mMainVM.mWifiNetworkState.observe(this, this::changeDisplayStatus);
     }
 
+
+    /**
+     * Map's Marker has been selection changed -> change Fab Action
+     * @param geoFenceData
+     */
     private void onSelectedGeofenceChanged(MyGeoFenceData geoFenceData) {
         // trigger when geoFenceData change
-        if(geoFenceData == null){
+        if (geoFenceData == null) {
             // unselected
             mFab.setImageResource(R.drawable.ic_action_add);
             mFabAction = FAB_ACTION_ADD;
-        }else {
+        } else {
             // selected
             mFab.setImageResource(R.drawable.ic_action_delete);
             mFabAction = FAB_ACTION_DELETE;
@@ -240,7 +254,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     private void onStateChanged(@NonNull Integer state) {
         Logger.d(TAG, "onStateChanged: %s", StateFlow.toString(state));
-        switch(state){
+        switch (state) {
             // app starting
             case StateFlow.CHECK_PERMISSION:
                 checkLocationPermission();
@@ -260,7 +274,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             // permission granted
             case StateFlow.PERMISSION_GRANTED:
                 // all set
-                if(mMainVM.isMapReady()) {
+                if (mMainVM.isMapReady()) {
                     Logger.d(TAG, "onStateChanged: map ready -> app ready");
                     mMainVM.mState.setValue(StateFlow.APP_READY);
                 }
@@ -274,12 +288,11 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
-
     private void onGeoFenceEditStateChanged(Integer state) {
-        if(state == null)
+        if (state == null)
             return;
         Logger.d(TAG, "onGeoFenceEditState: %s", StateFlow.toString(state));
-        switch(state){
+        switch (state) {
             // show the dialog for add geofence
             case StateFlow.GEO_FENCE_ADD_START:
 
@@ -304,7 +317,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 // set id
                 int id = IdGenerator.newId();
                 MyGeoFenceData dialogData = mMainVM.mDialogData;
-                dialogData.id =id;
+                dialogData.id = id;
 
 
                 // (Container) add new GeoFenceDataList
@@ -312,8 +325,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 // (Map) add to map marker
                 mMainVM.mMapController.addGeoFence(dialogData);
                 // (Geofence Monitor)
-                if(mGeofenceMonitor == null)
-                    mGeofenceMonitor = new GeofenceMonitor(this);
+                if (mGeofenceMonitor == null)
+                    mGeofenceMonitor = new GeofenceMonitor(this, this);
                 mGeofenceMonitor.addGeofence(dialogData);
 
 
@@ -360,7 +373,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         //noinspection ConstantConditions
         int state = mMainVM.mState.getValue();
-        if(state >= StateFlow.PERMISSION_GRANTED){
+        if (state >= StateFlow.PERMISSION_GRANTED) {
             Logger.d(TAG, "onMapReady: permission granted -> app ready");
             mMainVM.mState.setValue(StateFlow.APP_READY);
         }
@@ -368,10 +381,11 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     private void onMapClicked(LatLng latLng) {
         // Validation for Mock Location
+        //noinspection ConstantConditions
         int geoFenceState = mMainVM.mGeofenceEditState.getValue();
-        if(geoFenceState == StateFlow.GEO_FENCE_PICK_LOCATION){
+        if (geoFenceState == StateFlow.GEO_FENCE_PICK_LOCATION) {
 
-            mMainVM.mDialogData.lat =  latLng.latitude;
+            mMainVM.mDialogData.lat = latLng.latitude;
             mMainVM.mDialogData.lng = latLng.longitude;
 
             // update State
@@ -379,14 +393,14 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             return;
         }
 
-        if(mMainVM.mSelectedGeoFence.getValue() != null){
+        if (mMainVM.mSelectedGeoFence.getValue() != null) {
             // unselect geo fence
             mMainVM.mSelectedGeoFence.setValue(null);
         }
 
 
         boolean allowClick = false;
-        if ( allowClick) {
+        if (allowClick) {
             Location location = new Location("mock");
             location.setLatitude(latLng.latitude);
             location.setLongitude(latLng.longitude);
@@ -403,7 +417,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private void checkLocationPermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             mMainVM.mState.setValue(StateFlow.PERMISSION_GRANTED);
-            return;
         } else if (!mAskedPermission) {
             mAskedPermission = true;
             mMainVM.mState.setValue(StateFlow.GRANT_PERMISSION);
@@ -439,28 +452,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 boolean showRationale = shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION);
                 if (!showRationale) {
                     mMainVM.mState.setValue(StateFlow.GRANT_PERMISSION_DENIED_PERMANENTLY);
-//                    // Handle DO NOT ASK AGAIN
-//                    Snackbar snackbar = Snackbar.make(mContentView, R.string.permission_rationale_title, Snackbar.LENGTH_INDEFINITE);
-//                    snackbar.setAction(R.string.setting, view -> requireUserGoToSetting());
-//                    snackbar.show();
                 } else {
-//                    new AlertDialog.Builder(this)
-//                            .setTitle(R.string.require_location_permission)
-//                            .setMessage(R.string.location_permission_denied_message)
-//                            .setPositiveButton(android.R.string.yes, (dialog, i) -> {
-//                                dialog.dismiss();
-//                                finish();
-//                            })
-//                            .setNegativeButton(android.R.string.no, (dialog, i) -> {
-//                                dialog.dismiss();
-//
-//                                new Handler(Looper.getMainLooper()).post(() -> {
-//                                    // reset
-//                                    mAskedPermission = false;
-//                                    checkLocationPermission();
-//                                });
-//                            })
-//                            .show();
                     mMainVM.mState.setValue(StateFlow.SHOW_REQUEST_PERMISSION_RATIONALE);
                     Logger.i(TAG, "onRequestPermissionsResult: denied");
                 }
@@ -495,9 +487,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
 
     private void onLocationChanged(Location location) {
-        if (location == null) {
-            // TODO: show message ? retry ?
-        } else {
+        if (location != null) {
             Logger.i(TAG, "onLocationChanged: %s", location);
             if (mMainVM.mMapController != null) {
                 // setup last location on the map ?
@@ -508,7 +498,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
         }
     }
-
 
 
     @SuppressLint("MissingPermission")
@@ -529,14 +518,14 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
 
             //noinspection ConstantConditions
-            if (mMainVM.mState.getValue() >= StateFlow.PERMISSION_GRANTED){
-                if(!mMainVM.mMonitoringLocationUpdate) {
+            if (mMainVM.mState.getValue() >= StateFlow.PERMISSION_GRANTED) {
+                if (!mMainVM.mMonitoringLocationUpdate) {
                     mMainVM.mMonitoringLocationUpdate = true;
                     mFusedLocationClient.requestLocationUpdates(mLocationRequest,
                             mLocationCallback,
                             null);
                 }
-            }else{
+            } else {
                 Logger.d(TAG, "monitorLocationUpdate: permission not granted -> skip");
             }
         }
@@ -554,16 +543,94 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     // endregion Location Monitor
 
-    // region GeoFence Client
+    // region GeoFence Monitor
     //=================================================================
 
+    /**
+     * Listener when Ge
+     *
+     * @param statusCode
+     * @noinspection deprecation
+     */
+    @Override
+    public void onMonitorStatusUpdate(int statusCode) {
+        @StringRes int msgId;
+        if(statusCode == LocationStatusCodes.SUCCESS){
+            msgId = R.string.geofence_add_monitor_success;
+        }else {
+            switch (statusCode) {
+                case LocationStatusCodes.GEOFENCE_NOT_AVAILABLE:
+                    msgId = R.string.geofence_not_available;
+                    break;
+                case LocationStatusCodes.ERROR:
+                    msgId = R.string.unknown_geofence_error;
+                    break;
+                case LocationStatusCodes.GEOFENCE_TOO_MANY_GEOFENCES:
+                    msgId = R.string.geofence_too_many_geofences;
+                    break;
+                case LocationStatusCodes.GEOFENCE_TOO_MANY_PENDING_INTENTS:
+                    msgId = R.string.geofence_too_many_pending_intents;
+                    break;
+                default:
+                    msgId = R.string.unknown_geofence_error;
+                    break;
+            }
+        }
+        Snackbar.make(mContentView, msgId, Snackbar.LENGTH_LONG).show();
 
-    
-    
-
+    }
 
     //=================================================================
-    // endregion GeoFence Client
+    // endregion GeoFence Monitor
+
+    // region [Output Result ]
+    //=================================================================
+
+    @BindView(R.id.tvStatus) TextView mTvStatus;
+
+    /** @noinspection unused*/
+    private void changeDisplayStatus(Integer dummy) {
+        updateStatus();
+    }
+
+
+    // Decision check and show the current status - in / out
+    // Rule1: Wifi Network connected -> in (even is outside geofence)
+    // Rule2: Geofence in / out
+    private void updateStatus() {
+        EDeviceStatus status;
+        Integer transition = mMainVM.mGeofenceTransition.getValue();
+        Integer wifiStatus = mMainVM.mWifiNetworkState.getValue();
+
+        // Rule 1: Wifi Network connected -> in (even is outside geofence)
+        if (wifiStatus != null && wifiStatus == WifiNetworkMonitor.WIFI_CONNECTED) {
+            status = EDeviceStatus.In;
+        } else {
+            // Rule 2: Geofence in / out
+            if (transition == null) {
+                status = EDeviceStatus.Unknown;
+            } else {
+
+                switch (transition) {
+                    case Geofence.GEOFENCE_TRANSITION_ENTER:
+                        status = EDeviceStatus.In;
+                        break;
+                    case Geofence.GEOFENCE_TRANSITION_EXIT:
+                        status = EDeviceStatus.Out;
+                        break;
+                    default:
+                        status = EDeviceStatus.Unknown;
+                }
+            }
+        }
+
+        mTvStatus.setText(getString(R.string.status, status));
+
+
+    }
+    //=================================================================
+    // endregion [Output Result]
+
 
     private class MyLocationCallback extends LocationCallback {
         @Override
@@ -592,7 +659,14 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
+    public class MyWifiStatusCallback implements WifiNetworkMonitor.IWifiStatusCallback {
 
+        @Override
+        public void onWifiStateChange(int wifiState) {
+            Logger.d(TAG, "onWifiStateChange: %d", wifiState);
+            mMainVM.mWifiNetworkState.postValue(wifiState);
+        }
+    }
 
 
 }
