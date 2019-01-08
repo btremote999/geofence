@@ -17,8 +17,8 @@ import btremote999.geofencetest.data.MyCircle;
 import btremote999.geofencetest.data.MyGeoFenceData;
 import btremote999.geofencetest.utils.Logger;
 
-public class GeoFenceAddDialog extends DialogFragment {
-    public static final String TAG = "GeoFenceAddDialog";
+public class GeofenceAddDialog extends DialogFragment {
+    public static final String TAG = "GeofenceAddDialog";
 
     EditText edWifi;
     EditText edLat;
@@ -238,9 +238,9 @@ public class GeoFenceAddDialog extends DialogFragment {
 
             if(isRadiusOk){
                 int iRadius = Integer.valueOf(sRadius);
-                if(iRadius > 1000){
+                if(iRadius > 200){
                     isRadiusOk = false;
-                    edRadius.setError("Radius max is 1000");
+                    edRadius.setError("Radius max is 200");
                 }else{
                     edRadius.setError(null);
                 }
@@ -268,7 +268,7 @@ public class GeoFenceAddDialog extends DialogFragment {
 
         if(edRadius.getText() != null && !edRadius.getText().toString().isEmpty()) {
             MyCircle circle = new MyCircle();
-            circle.radius = Double.valueOf(edRadius.getText().toString());
+            circle.radius = Float.valueOf(edRadius.getText().toString());
             ret.surface = circle;
         }
         return ret;
