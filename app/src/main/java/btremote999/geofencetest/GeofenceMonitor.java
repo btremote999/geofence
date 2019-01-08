@@ -73,8 +73,6 @@ public class GeofenceMonitor implements OnCompleteListener<Void> {
 
         if(mGeofencePendingIntent != null)
             mGeofencingClient.removeGeofences(mGeofencePendingIntent);
-
-
     }
 
     /**
@@ -113,7 +111,7 @@ public class GeofenceMonitor implements OnCompleteListener<Void> {
         // The INITIAL_TRIGGER_ENTER flag indicates that geofencing service should trigger a
         // GEOFENCE_TRANSITION_ENTER notification when the geofence is added and if the device
         // is already inside that geofence.
-        builder.setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER);
+        builder.setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER|GeofencingRequest.INITIAL_TRIGGER_EXIT);
 
         // Add the geofences to be monitored by geofencing service.
         builder.addGeofences(mGeofenceList);
@@ -127,10 +125,12 @@ public class GeofenceMonitor implements OnCompleteListener<Void> {
         if (mGeofencePendingIntent != null) {
             return mGeofencePendingIntent;
         }
+//        Intent intent = new Intent(mContext, BroadcastReceiver.class);
         Intent intent = new Intent(mContext, GeofenceTransitionsJobIntentService.class);
         // We use FLAG_UPDATE_CURRENT so that we get the same pending intent back when calling
         // addGeofences() and removeGeofences().
         mGeofencePendingIntent = PendingIntent.getService(mContext, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+//        mGeofencePendingIntent = PendingIntent.getBroadcast(mContext, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
         return mGeofencePendingIntent;
     }
 
@@ -154,6 +154,8 @@ public class GeofenceMonitor implements OnCompleteListener<Void> {
             }
 
             // TODO: 08/01/2019 show error to UI
+        }else {
+            Logger.d(TAG, "onComplete: success");
         }
 
     }

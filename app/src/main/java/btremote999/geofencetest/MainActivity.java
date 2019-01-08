@@ -25,6 +25,8 @@ import android.view.MenuItem;
 import android.view.View;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.Geofence;
+import com.google.android.gms.location.GeofencingEvent;
 import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationResult;
@@ -33,6 +35,8 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
+
+import java.util.List;
 
 import btremote999.geofencetest.data.MyGeoFenceData;
 import btremote999.geofencetest.utils.IdGenerator;
@@ -183,6 +187,31 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
+    @Override
+    protected void onNewIntent(Intent intent) {
+        Logger.d(TAG, "onNewIntent: intent");
+        if(Consts.GEOFENCE.equals(intent.getAction())) {
+            Intent geofenceEvent = intent.getParcelableExtra(Consts.DATA);
+
+            GeofencingEvent geofencingEvent = GeofencingEvent.fromIntent(intent);
+            if (geofencingEvent.hasError()) {
+                return;
+            }
+
+            // Get the transition type.
+            int geofenceTransition = geofencingEvent.getGeofenceTransition();
+
+            // Test that the reported transition was of interest.
+            if (geofenceTransition == Geofence.GEOFENCE_TRANSITION_ENTER ||
+                    geofenceTransition == Geofence.GEOFENCE_TRANSITION_EXIT) {
+
+                // Get the geofences that were triggered. A single event can trigger multiple geofences.
+                List<Geofence> triggeringGeofences = geofencingEvent.getTriggeringGeofences();
+            }
+        }else {
+            super.onNewIntent(intent);
+        }
+    }
 
     private void setupViewModel() {
         mMainVM = ViewModelProviders.of(this).get(MainVM.class);

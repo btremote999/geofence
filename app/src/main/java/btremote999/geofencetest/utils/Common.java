@@ -19,7 +19,9 @@ public class Common {
         }
         else {
             // patch case for samsung s7 with xxxhdp
-            return (int) (dp * 4);
+            return dp * 4;
         }
     }
+
+
 }
