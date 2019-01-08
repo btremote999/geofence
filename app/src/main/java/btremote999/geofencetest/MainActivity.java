@@ -51,6 +51,10 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private SupportMapFragment mMapFragment;
 
     private FusedLocationProviderClient mFusedLocationClient;
+    private GeofenceMonitor mGeofenceMonitor;
+
+//    private GeofenceBroadcastReceiver mGeofenceBroadcastReceiver;
+
     private MainVM mMainVM;
     private int mFabAction = FAB_ACTION_ADD;
 
@@ -81,6 +85,12 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         // setup location callback
         mLocationCallback = new MyLocationCallback();
 
+
+        // Broadcast Receiver
+//        mGeofenceBroadcastReceiver = new GeofenceBroadcastReceiver();
+//        registerReceiver(mGeofenceBroadcastReceiver,
+//                new IntentFilter());
+
         mMainVM.mState.setValue(StateFlow.CHECK_PERMISSION);
     }
 
@@ -94,20 +104,28 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             // delete GeoFance
             MyGeoFenceData target = mMainVM.mSelectedGeoFence.getValue();
             if(target != null){
+                // remove geofence from container
                 mMainVM.mMyGeoFenceDataList.remove(target.id);
+
+                // remove geofence from map
                 mMainVM.mMapController.removeMarker(target);
 
+                // remove geofence from monitor
+                mGeofenceMonitor.removeGeofence(target);
+
                 mMainVM.mSelectedGeoFence.setValue(null);
+
+
             }
         }
 
 
     }
 
-    private void showGeoFenceEdit(int fabAction) {
+    private void showGeoFenceEdit() {
         // Show Dialog Fragment
-        GeoFenceAddDialog dlg = new GeoFenceAddDialog();
-        dlg.show(getSupportFragmentManager(), GeoFenceAddDialog.TAG);
+        GeofenceAddDialog dlg = new GeofenceAddDialog();
+        dlg.show(getSupportFragmentManager(), GeofenceAddDialog.TAG);
     }
 
     @Override
@@ -117,11 +135,18 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     @Override
+    protected void onDestroy() {
+        if(mGeofenceMonitor != null)
+            mGeofenceMonitor.stopGeofenceMonitor();
+
+        super.onDestroy();
+    }
+
+    @Override
     protected void onPause() {
         unMonitorLocationUpdate();
         super.onPause();
     }
-
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -220,6 +245,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
+
     private void onGeoFenceEditStateChanged(Integer state) {
         if(state == null)
             return;
@@ -228,7 +254,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             // show the dialog for add geofence
             case StateFlow.GEO_FENCE_ADD_START:
 
-                showGeoFenceEdit(mFabAction);
+                showGeoFenceEdit();
                 break;
 
 
@@ -238,12 +264,12 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 // show the dialog again
                 // do nothing 
                 break;
-                
+
             case StateFlow.GEO_FENCE_PICK_LOCATION_DONE:
                 // location selected -> update dialog data
-                showGeoFenceEdit(mFabAction);
-                break; 
-                
+                showGeoFenceEdit();
+                break;
+
             case StateFlow.GEO_FENCE_ADD_COMPLETED:
 
                 // set id
@@ -251,10 +277,16 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 MyGeoFenceData dialogData = mMainVM.mDialogData;
                 dialogData.id =id;
 
-                // add new GeoFenceDataList
+
+                // (Container) add new GeoFenceDataList
                 mMainVM.mMyGeoFenceDataList.put(id, dialogData);
-                // add to map marker
+                // (Map) add to map marker
                 mMainVM.mMapController.addGeoFence(dialogData);
+                // (Geofence Monitor)
+                if(mGeofenceMonitor == null)
+                    mGeofenceMonitor = new GeofenceMonitor(this);
+                mGeofenceMonitor.addGeofence(dialogData);
+
 
                 // reset
                 mMainVM.mDialogData = null;
@@ -278,7 +310,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 })
                 .show();
     }
-
     // region Google Map
 
 
@@ -493,6 +524,17 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     // endregion Location Monitor
+
+    // region GeoFence Client
+    //=================================================================
+
+
+    
+    
+
+
+    //=================================================================
+    // endregion GeoFence Client
 
     private class MyLocationCallback extends LocationCallback {
         @Override
