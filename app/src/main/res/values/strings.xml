@@ -17,4 +17,6 @@
     <string name="geofence_transition_entered">Geofence entered</string>
     <string name="geofence_transition_exited">Geofence exited</string>
     <string name="unknown_geofence_transition">Geofence unknown transition</string>
+    <string name="status">Status: %1$s</string>
+    <string name="geofence_add_monitor_success">GeoFencing add successful</string>
 </resources>

@@ -11,7 +11,7 @@ public class MyApp extends Application implements Application.ActivityLifecycleC
     private static final String TAG = "MyApp";
 
     private Activity mLastShowActivity;
-    private Intent mLastGeoFenceIntent;
+    private Integer mLastTransition;
 
     @Override
     public void onCreate() {
@@ -30,22 +30,22 @@ public class MyApp extends Application implements Application.ActivityLifecycleC
         return false;
     }
 
-    public void forwardGeoFence(Intent intent){
+    public void forwardGeoFence(int transition){
         if(mLastShowActivity instanceof MainActivity){
-            sendIntent(intent);
+            sendIntent(transition);
         }else {
-            mLastGeoFenceIntent = intent;
+            mLastTransition = transition;
             Logger.d(TAG, "forwardGeoFence: MainActivity not show, keep it");
         }
     }
 
-    private void sendIntent(Intent intent) {
+    private void sendIntent(int transition) {
         Intent forwardIntent = new Intent(this, MainActivity.class);
         forwardIntent.setAction(Consts.GEOFENCE);
         forwardIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        forwardIntent.putExtra(Consts.DATA, intent);
+        forwardIntent.putExtra(Consts.DATA, transition);
         startActivity(forwardIntent);
-        mLastGeoFenceIntent = null;
+        mLastTransition = null;
         Logger.d(TAG, "forwardGeoFence: forwarded to MainActivity");
     }
 
@@ -66,9 +66,9 @@ public class MyApp extends Application implements Application.ActivityLifecycleC
     public void onActivityResumed(Activity activity) {
         mLastShowActivity = activity;
         // Sent last saved intent to MainActivity
-        if(mLastGeoFenceIntent != null &&
+        if(mLastTransition != null &&
                 mLastShowActivity instanceof MainActivity ){
-            sendIntent(mLastGeoFenceIntent);
+            sendIntent(mLastTransition);
         }
     }
 

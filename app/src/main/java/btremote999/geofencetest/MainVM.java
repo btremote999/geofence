@@ -5,6 +5,8 @@ import android.arch.lifecycle.ViewModel;
 import android.location.Location;
 import android.support.v4.util.SparseArrayCompat;
 
+import com.google.android.gms.location.Geofence;
+
 import btremote999.geofencetest.data.MyGeoFenceData;
 
 public class MainVM extends ViewModel {
@@ -20,15 +22,19 @@ public class MainVM extends ViewModel {
     // Collection of GeoFenceData
     SparseArrayCompat<MyGeoFenceData> mMyGeoFenceDataList = new SparseArrayCompat<>();
 
+    // Location Changed
     MutableLiveData<Location> mLocation = new MutableLiveData<>();
 
-    // Working State
+    // Working Object
     MapController mMapController;
+    // Not used for the moment
     MutableLiveData<Boolean> mMockLocation = new MutableLiveData<>();
 
-    // Dialog Result
-//    MutableLiveData<MyGeoFenceData> mAddGeoFence = new MutableLiveData<>();
-//    MutableLiveData<MyGeoFenceData> mEditGeoFence = new MutableLiveData<>();
+    // GeoFencing result
+    MutableLiveData<Integer> mGeofenceTransition  = new MutableLiveData<>();
+    MutableLiveData<Integer> mWifiNetworkState  = new MutableLiveData<>();
+
+
 
     private boolean mIsMapReady = false;
     boolean mMonitoringLocationUpdate = false;
@@ -37,6 +43,7 @@ public class MainVM extends ViewModel {
         mMockLocation.setValue(false);
         mState.setValue(0);
         mGeofenceEditState.setValue(0);
+        mGeofenceTransition.setValue(Geofence.GEOFENCE_TRANSITION_EXIT);
     }
 
     public boolean isMapReady(){

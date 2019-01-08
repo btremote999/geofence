@@ -229,7 +229,7 @@ public class MapController {
         map.setMapType(GoogleMap.MAP_TYPE_NORMAL);
 
         map.setMyLocationEnabled(true);
-        map.setPadding(0,0,Common.dpToPx(20), Common.dpToPx(80));
+        map.setPadding(0,Common.dpToPx(24),Common.dpToPx(20), Common.dpToPx(80));
         map.setOnMarkerClickListener(new MyOnMarkerClickListener());
 
         updateSelf(centerLocation);

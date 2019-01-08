@@ -45,7 +45,9 @@ public class GeofenceTransitionsJobIntentService extends JobIntentService {
         }
 
         // Get the transition type.
-//        int geofenceTransition = geofencingEvent.getGeofenceTransition();
+        int geofenceTransition = geofencingEvent.getGeofenceTransition();
+        Logger.d(TAG, "onHandleWork: geofenceTransition =%d", geofenceTransition);
+
 //
 //        // Test that the reported transition was of interest.
 //        if (geofenceTransition == Geofence.GEOFENCE_TRANSITION_ENTER ||
@@ -63,7 +65,7 @@ public class GeofenceTransitionsJobIntentService extends JobIntentService {
 
             // send intent to current main activity if MainActivity is foreground
             MyApp app = (MyApp) getApplication();
-            app.forwardGeoFence(intent);
+            app.forwardGeoFence(geofenceTransition);
 
 //        } else {
 //            // Log the error.
