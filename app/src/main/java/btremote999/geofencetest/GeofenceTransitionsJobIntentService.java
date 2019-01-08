@@ -20,15 +20,6 @@ import btremote999.geofencetest.utils.Logger;
 public class GeofenceTransitionsJobIntentService extends JobIntentService {
     private static final String TAG = "GeofenceTransitionsJobIntentService";
 
-//    private static final int JOB_ID = 573;
-
-//    /**
-//     * Convenience method for enqueuing work in to this service.
-//     */
-//    public static void enqueueWork(Context context, Intent intent) {
-//        enqueueWork(context, GeofenceTransitionsJobIntentService.class, JOB_ID, intent);
-//    }
-
     /**
      * Handles incoming intents.
      *
@@ -48,29 +39,10 @@ public class GeofenceTransitionsJobIntentService extends JobIntentService {
         int geofenceTransition = geofencingEvent.getGeofenceTransition();
         Logger.d(TAG, "onHandleWork: geofenceTransition =%d", geofenceTransition);
 
-//
-//        // Test that the reported transition was of interest.
-//        if (geofenceTransition == Geofence.GEOFENCE_TRANSITION_ENTER ||
-//                geofenceTransition == Geofence.GEOFENCE_TRANSITION_EXIT) {
-//
-//            // Get the geofences that were triggered. A single event can trigger multiple geofences.
-//            List<Geofence> triggeringGeofences = geofencingEvent.getTriggeringGeofences();
-//
-//            // Get the transition details as a String.
-//            String geofenceTransitionDetails = getGeofenceTransitionDetails(geofenceTransition,
-//                    triggeringGeofences);
-//
-//            // Send notification and log the transition details.
-//            Logger.i(TAG, geofenceTransitionDetails);
+        // send transition result to current main activity if MainActivity is foreground
+        MyApp app = (MyApp) getApplication();
+        app.forwardGeoFence(geofenceTransition);
 
-            // send intent to current main activity if MainActivity is foreground
-            MyApp app = (MyApp) getApplication();
-            app.forwardGeoFence(geofenceTransition);
-
-//        } else {
-//            // Log the error.
-//            Logger.e(TAG, "Invalid transition Type: %d", geofenceTransition);
-//        }
     }
 
     /**

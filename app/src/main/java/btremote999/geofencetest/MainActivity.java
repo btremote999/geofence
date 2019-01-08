@@ -58,7 +58,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private static final int FAB_ACTION_DELETE = 1;
 
     private static final String TAG = "MainActivity";
-    private SupportMapFragment mMapFragment;
 
     private FusedLocationProviderClient mFusedLocationClient;
     private GeofenceMonitor mGeofenceMonitor;
@@ -87,29 +86,22 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         mFab.setOnClickListener(view -> this.onFabClicked());
 
         // setup  google map
-        mMapFragment = (SupportMapFragment) getSupportFragmentManager()
+        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
-        if (mMapFragment != null)
-            mMapFragment.getMapAsync(this);
+        if (mapFragment != null)
+            mapFragment.getMapAsync(this);
 
         // setup location callback
         mLocationCallback = new MyLocationCallback();
         // setup wifi status callback
         mWifiStatusCallback = new MyWifiStatusCallback();
 
-
-        // Broadcast Receiver
-//        mGeofenceBroadcastReceiver = new GeofenceBroadcastReceiver();
-//        registerReceiver(mGeofenceBroadcastReceiver,
-//                new IntentFilter());
-
         mMainVM.mState.setValue(StateFlow.CHECK_PERMISSION);
     }
 
     private void onFabClicked() {
         Logger.d(TAG, "onFabClicked: ");
-        // TODO: 06/01/2019 fab button serve 2 functions:
-        //showGeoFenceEdit(mFabAction);
+        // fab button serve 2 functions:
         if (mFabAction == FAB_ACTION_ADD) {
             mMainVM.mGeofenceEditState.setValue(StateFlow.GEO_FENCE_ADD_START);
         } else if (mFabAction == FAB_ACTION_DELETE) {
@@ -389,6 +381,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     private void onMapClicked(LatLng latLng) {
         // Validation for Mock Location
+        //noinspection ConstantConditions
         int geoFenceState = mMainVM.mGeofenceEditState.getValue();
         if (geoFenceState == StateFlow.GEO_FENCE_PICK_LOCATION) {
 
@@ -424,7 +417,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private void checkLocationPermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             mMainVM.mState.setValue(StateFlow.PERMISSION_GRANTED);
-            return;
         } else if (!mAskedPermission) {
             mAskedPermission = true;
             mMainVM.mState.setValue(StateFlow.GRANT_PERMISSION);
@@ -460,28 +452,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 boolean showRationale = shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION);
                 if (!showRationale) {
                     mMainVM.mState.setValue(StateFlow.GRANT_PERMISSION_DENIED_PERMANENTLY);
-//                    // Handle DO NOT ASK AGAIN
-//                    Snackbar snackbar = Snackbar.make(mContentView, R.string.permission_rationale_title, Snackbar.LENGTH_INDEFINITE);
-//                    snackbar.setAction(R.string.setting, view -> requireUserGoToSetting());
-//                    snackbar.show();
                 } else {
-//                    new AlertDialog.Builder(this)
-//                            .setTitle(R.string.require_location_permission)
-//                            .setMessage(R.string.location_permission_denied_message)
-//                            .setPositiveButton(android.R.string.yes, (dialog, i) -> {
-//                                dialog.dismiss();
-//                                finish();
-//                            })
-//                            .setNegativeButton(android.R.string.no, (dialog, i) -> {
-//                                dialog.dismiss();
-//
-//                                new Handler(Looper.getMainLooper()).post(() -> {
-//                                    // reset
-//                                    mAskedPermission = false;
-//                                    checkLocationPermission();
-//                                });
-//                            })
-//                            .show();
                     mMainVM.mState.setValue(StateFlow.SHOW_REQUEST_PERMISSION_RATIONALE);
                     Logger.i(TAG, "onRequestPermissionsResult: denied");
                 }
@@ -579,6 +550,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
      * Listener when Ge
      *
      * @param statusCode
+     * @noinspection deprecation
      */
     @Override
     public void onMonitorStatusUpdate(int statusCode) {
@@ -616,6 +588,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     @BindView(R.id.tvStatus) TextView mTvStatus;
 
+    /** @noinspection unused*/
     private void changeDisplayStatus(Integer dummy) {
         updateStatus();
     }
